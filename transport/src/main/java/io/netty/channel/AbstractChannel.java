@@ -76,8 +76,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
      */
     protected AbstractChannel(Channel parent) {
         this.parent = parent;
+        //channel标识
         id = newId();
         unsafe = newUnsafe();
+        //逻辑处理链
         pipeline = newChannelPipeline();
     }
 
@@ -465,7 +467,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         new IllegalStateException("incompatible event loop type: " + eventLoop.getClass().getName()));
                 return;
             }
-
+            //将EventLoop赋值给channel上，channel上所有的事件都由这个eventloop处理
             AbstractChannel.this.eventLoop = eventLoop;
 
             if (eventLoop.inEventLoop()) {
@@ -497,20 +499,26 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                     return;
                 }
                 boolean firstRegistration = neverRegistered;
+                // io.netty.channel.nio.AbstractNioChannel.doRegister()
                 doRegister();
                 neverRegistered = false;
                 registered = true;
 
                 // Ensure we call handlerAdded(...) before we actually notify the promise. This is needed as the
                 // user may already fire events through the pipeline in the ChannelFutureListener.
+                // 触发 io.netty.channel.ChannelHandler.handlerAdded()
                 pipeline.invokeHandlerAddedIfNeeded();
 
                 safeSetSuccess(promise);
+
+                // io.netty.channel.ChannelInboundHandler.channelRegistered
                 pipeline.fireChannelRegistered();
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
+                // server端bind()时，isActive为false
                 if (isActive()) {
                     if (firstRegistration) {
+                        //触发通道激活事件，调用HeadContent的
                         pipeline.fireChannelActive();
                     } else if (config().isAutoRead()) {
                         // This channel was registered before and autoRead() is set. This means we need to begin read
@@ -551,6 +559,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             boolean wasActive = isActive();
             try {
+                // 服务端 io.netty.channel.socket.nio.NioServerSocketChannel.doBind()
                 doBind(localAddress);
             } catch (Throwable t) {
                 safeSetFailure(promise, t);
@@ -558,6 +567,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 端口绑定前不是active，绑定后是active，触发active事件
+            // 最终在channel上注册op_accept事件
             if (!wasActive && isActive()) {
                 invokeLater(new Runnable() {
                     @Override
@@ -778,10 +789,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+
         @Override
         public final void write(Object msg, ChannelPromise promise) {
             assertEventLoop();
-
+//            获取该NioSocketChannel的ChannelOutboundBuffer成员属性。（确切地来说ChannelOutboundBuffer是NioSocketChannelUnsafe对象中的成员属性，而NioSocketChannelUnsafe才是NioSocketChannel的成员属性。）
+// 每一个NioSocketChannel会维护一个它们自己的ChannelOutboundBuffer，用于存储待出站写请求。
+//判断该outboundBuffer是否为null，如果为null则说明该NioSocketChannel已经关闭了，那么就会标志该异步写操作为失败完成，并释放写消息后返回。
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
                 // If the outboundBuffer is null we know the channel was closed and so
@@ -796,7 +810,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             int size;
             try {
+//                过滤待发送的消息，只有ByteBuf（堆 or 非堆）以及 FileRegion可以进行最终的Socket网络传输，其他类型的数据是不支持的，会抛UnsupportedOperationException异常。并且会把堆ByteBuf转换为一个非堆的ByteBuf返回。也就说，最后会通过socket传输的对象时非堆的ByteBuf和FileRegion。
                 msg = filterOutboundMessage(msg);
+//                估计待发送数据的大小
                 size = pipeline.estimatorHandle().size(msg);
                 if (size < 0) {
                     size = 0;
@@ -806,7 +822,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 ReferenceCountUtil.release(msg);
                 return;
             }
-
+//            将消息加入outboundBuffer中等待发送。将会触发水位控制
             outboundBuffer.addMessage(msg, size, promise);
         }
 
@@ -818,7 +834,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             if (outboundBuffer == null) {
                 return;
             }
-
+//            添加一个flush到这个ChannelOutboundBuffer，这意味着，将在此之前添加的消息标记为flushed，你将可以处理这些消息。
             outboundBuffer.addFlush();
             flush0();
         }
@@ -830,13 +846,14 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+//            判断Channel的输出缓冲区是否为null或待发送的数据个数为0，如果是则直接返回，因为此时并没有数据需要发送。
             final ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null || outboundBuffer.isEmpty()) {
                 return;
             }
 
             inFlush0 = true;
-
+//            判断当前的NioSocketChannel是否是Inactive状态，如果是，则会标识所有等待写请求为失败（即所有的write操作的promise都会是失败完成），并且如果NioSocketChannel已经关闭了，失败的原因是“FLUSH0_CLOSED_CHANNEL_EXCEPTION”且不会回调注册到promise上的listeners；但如果NioSocketChannel还是open的，则失败的原始是“FLUSH0_NOT_YET_CONNECTED_EXCEPTION”并且会回调注册到promise上的listeners。
             // Mark all pending write requests as failure if the channel is inactive.
             if (!isActive()) {
                 try {
@@ -851,7 +868,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 }
                 return;
             }
-
+//            调用doWrite(outboundBuffer);方法将Channel输出缓冲区中的数据通过socket传输给对端
             try {
                 doWrite(outboundBuffer);
             } catch (Throwable t) {

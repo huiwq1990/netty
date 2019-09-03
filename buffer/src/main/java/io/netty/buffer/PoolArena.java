@@ -172,12 +172,13 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     }
 
     private void allocate(PoolThreadCache cache, PooledByteBuf<T> buf, final int reqCapacity) {
-        final int normCapacity = normalizeCapacity(reqCapacity);
-        if (isTinyOrSmall(normCapacity)) { // capacity < pageSize
+        final int normCapacity = normalizeCapacity(reqCapacity);// 将需要申请的容量格式为 2^N
+        if (isTinyOrSmall(normCapacity)) { // capacity < pageSize 需要容量小于 chunk 每页数量，默认 8k
             int tableIdx;
             PoolSubpage<T>[] table;
             boolean tiny = isTiny(normCapacity);
             if (tiny) { // < 512
+                // 将分配区域转移到 tinySubpagePools 中
                 if (cache.allocateTiny(this, buf, reqCapacity, normCapacity)) {
                     // was able to allocate out of the cache so move on
                     return;
@@ -185,6 +186,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
                 tableIdx = tinyIdx(normCapacity);
                 table = tinySubpagePools;
             } else {
+                // 将分配区域转移到 smallSubpagePools 中
                 if (cache.allocateSmall(this, buf, reqCapacity, normCapacity)) {
                     // was able to allocate out of the cache so move on
                     return;
@@ -205,12 +207,13 @@ abstract class PoolArena<T> implements PoolArenaMetric {
                     assert s.doNotDestroy && s.elemSize == normCapacity;
                     long handle = s.allocate();
                     assert handle >= 0;
+                    // 初始化 PoolByteBuf 说明其位置被分配到该区域，但此时尚未分配内存
                     s.chunk.initBufWithSubpage(buf, handle, reqCapacity);
                     incTinySmallAllocation(tiny);
                     return;
                 }
             }
-            synchronized (this) {
+            synchronized (this) {// 如果此时 subpage 无内存分配记录则从 chunk 中分配空间
                 allocateNormal(buf, reqCapacity, normCapacity);
             }
 

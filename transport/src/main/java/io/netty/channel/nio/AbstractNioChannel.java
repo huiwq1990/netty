@@ -85,6 +85,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         this.ch = ch;
         this.readInterestOp = readInterestOp;
         try {
+            //配置阻塞模式为非阻塞
             ch.configureBlocking(false);
         } catch (IOException e) {
             try {
@@ -251,7 +252,9 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                 }
 
                 boolean wasActive = isActive();
+                //调用系统api，连接服务器
                 if (doConnect(remoteAddress, localAddress)) {
+                    //触发执行inbound事件， head -> customContext -> tail
                     fulfillConnectPromise(promise, wasActive);
                 } else {
                     connectPromise = promise;
@@ -308,6 +311,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             // Regardless if the connection attempt was cancelled, channelActive() event should be triggered,
             // because what happened is what happened.
             if (!wasActive && active) {
+//                会通过调用 pipeline().fireChannelActive() 将通道激活的消息(即 Socket 连接成功)发送出去.
                 pipeline().fireChannelActive();
             }
 
@@ -356,9 +360,11 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             // Flush immediately only when there's no pending flush.
             // If there's a pending flush operation, event loop will call forceFlush() later,
             // and thus there's no need to call it now.
+//            首先会判断当前NioSocketChannel的SelectionKey.OP_WRITE事件是否有被注册到对应的Selector上，如果有，则说明当前写缓冲区已经满了(这里指是socket的写缓冲区满了，并且socket并没有被关闭，那么write操作将返回0。这是如果还有未写出的数据待被发送，那么就会注册SelectionKey.OP_WRITE事件)。等写缓冲区有空间时，SelectionKey.OP_WRITE事件就会被触发，到时NioEventLoop的事件循环就会调用forceFlush()方法来继续将为写出的数据写出，所以这里直接返回就好。
             if (isFlushPending()) {
                 return;
             }
+//            当socket写缓冲区未满，那么就执行flush0()
             super.flush0();
         }
 
@@ -384,6 +390,9 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         boolean selected = false;
         for (;;) {
             try {
+                // 创建jdk底层channel，并绑定到成员变量中
+                // 0表示不关心任何事件
+                // attachment表示 jdk channel有事件发生后，使用nettychannel进行处理。
                 selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this);
                 return;
             } catch (CancelledKeyException e) {
@@ -416,6 +425,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
         readPending = true;
 
+        //readInterestOp是accept事件
         final int interestOps = selectionKey.interestOps();
         if ((interestOps & readInterestOp) == 0) {
             selectionKey.interestOps(interestOps | readInterestOp);

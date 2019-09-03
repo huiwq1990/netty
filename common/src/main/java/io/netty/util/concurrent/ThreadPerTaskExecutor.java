@@ -17,7 +17,9 @@ package io.netty.util.concurrent;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadFactory;
-
+//每次执行一个任务，创建线程实体
+//线程名称规则 nioEventLoop-1-xx
+//1代表EventLoopGroup数量
 public final class ThreadPerTaskExecutor implements Executor {
     private final ThreadFactory threadFactory;
 

@@ -80,6 +80,7 @@ final class EpollEventLoop extends SingleThreadEventLoop {
             events = new EpollEventArray(maxEvents);
         }
         boolean success = false;
+        //创建epollFd
         FileDescriptor epollFd = null;
         FileDescriptor eventFd = null;
         try {
@@ -128,6 +129,7 @@ final class EpollEventLoop extends SingleThreadEventLoop {
     }
 
     /**
+     * 将channel的fd加入的epoll队列
      * Register the given epoll with this {@link EventLoop}.
      */
     void add(AbstractEpollChannel ch) throws IOException {

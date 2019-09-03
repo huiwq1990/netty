@@ -20,8 +20,11 @@ import java.util.AbstractSet;
 import java.util.Arrays;
 import java.util.Iterator;
 
+//！！对于keyset的操作是单线程操作，底层使用数组实现
 final class SelectedSelectionKeySet extends AbstractSet<SelectionKey> {
-
+    /**
+     * 维持了一个数组，而不是HashSet
+     */
     SelectionKey[] keys;
     int size;
 
@@ -29,6 +32,7 @@ final class SelectedSelectionKeySet extends AbstractSet<SelectionKey> {
         keys = new SelectionKey[1024];
     }
 
+//    主需要这个方法，改方法直接操作数组，实现时间复杂度为O(1)
     @Override
     public boolean add(SelectionKey o) {
         if (o == null) {
@@ -47,17 +51,17 @@ final class SelectedSelectionKeySet extends AbstractSet<SelectionKey> {
     public int size() {
         return size;
     }
-
+    //不支持
     @Override
     public boolean remove(Object o) {
         return false;
     }
-
+    //不支持
     @Override
     public boolean contains(Object o) {
         return false;
     }
-
+    //不支持
     @Override
     public Iterator<SelectionKey> iterator() {
         throw new UnsupportedOperationException();

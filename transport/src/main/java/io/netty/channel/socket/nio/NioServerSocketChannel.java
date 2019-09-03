@@ -40,6 +40,7 @@ import java.util.List;
  * A {@link io.netty.channel.socket.ServerSocketChannel} implementation which uses
  * NIO selector based implementation to accept new connections.
  */
+//创建jdk底层channel并且用NioSocketChannel包装起来，将该channel添加到传入的容器保存起来，同时返回一个计数。
 public class NioServerSocketChannel extends AbstractNioMessageChannel
                              implements io.netty.channel.socket.ServerSocketChannel {
 
@@ -84,6 +85,7 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
      */
     public NioServerSocketChannel(ServerSocketChannel channel) {
         super(null, channel, SelectionKey.OP_ACCEPT);
+        //把channe传入config类，用于配置channel属性，如backlog等
         config = new NioServerSocketChannelConfig(this, javaChannel().socket());
     }
 
@@ -138,11 +140,14 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
     @Override
     protected int doReadMessages(List<Object> buf) throws Exception {
+        //获取jdk底层的channel
         SocketChannel ch = SocketUtils.accept(javaChannel());
 
         try {
             if (ch != null) {
+                //将jdk底层的channel封装到netty的channel，并存储到传入的容器当中
                 buf.add(new NioSocketChannel(this, ch));
+                //成功和创建 客户端接入的一条通道，并返回
                 return 1;
             }
         } catch (Throwable t) {

@@ -896,7 +896,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             inEventLoop = false;
         }
     }
-
+//    从pipeline的头部开始，即DefaultChannelPipeline.HeadContext#channelActive()从而触发了readIfIsAutoRead()
     @Override
     public final ChannelPipeline fireChannelActive() {
         AbstractChannelHandlerContext.invokeChannelActive(head);
@@ -1258,6 +1258,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             unsafe.bind(localAddress, promise);
         }
 
+//        向eventloop(nio的selector)注册一个读事件。
         @Override
         public void connect(
                 ChannelHandlerContext ctx,
@@ -1286,6 +1287,8 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             unsafe.beginRead();
         }
 
+//        unsafe是我们构建NioServerSocketChannel或NioSocketChannel对象时，一并构建一个成员属性，它会完成底层真正的网络操作等。
+//        NioServerSocketChannel中持有的unsafe成员变量是NioMessageUnsafe对象，而NioSocketChannel中持有的unsafe成员变量是NioSocketChannelUnsafe对象。
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
             unsafe.write(msg, promise);
@@ -1321,6 +1324,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         public void channelActive(ChannelHandlerContext ctx) throws Exception {
             ctx.fireChannelActive();
 
+            // 触发channel.read，注册accept事件
             readIfIsAutoRead();
         }
 

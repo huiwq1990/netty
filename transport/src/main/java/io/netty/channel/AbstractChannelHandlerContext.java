@@ -210,6 +210,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     private void invokeChannelActive() {
         if (invokeHandler()) {
             try {
+                // io.netty.channel.DefaultChannelPipeline.HeadContext.channelActive()
                 ((ChannelInboundHandler) handler()).channelActive(this);
             } catch (Throwable t) {
                 notifyHandlerException(t);
@@ -498,6 +499,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     private void invokeBind(SocketAddress localAddress, ChannelPromise promise) {
         if (invokeHandler()) {
             try {
+//                DefaultChannelPipeline.HeadContext.bind()
                 ((ChannelOutboundHandler) handler()).bind(this, localAddress, promise);
             } catch (Throwable t) {
                 notifyOutboundHandlerException(t, promise);
@@ -732,7 +734,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
             write(msg, promise);
         }
     }
-
+//    write是一个出站事件，它最终会调用到io.netty.channel.DefaultChannelPipeline.HeadContext.write的相关方法
     private void invokeWrite0(Object msg, ChannelPromise promise) {
         try {
             ((ChannelOutboundHandler) handler()).write(this, msg, promise);
@@ -773,6 +775,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     private void invokeFlush0() {
         try {
+//            触发ChannelOutboundBuffer发消息
             ((ChannelOutboundHandler) handler()).flush(this);
         } catch (Throwable t) {
             notifyHandlerException(t);
@@ -781,6 +784,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     @Override
     public ChannelFuture writeAndFlush(Object msg, ChannelPromise promise) {
+        //消息为空抛出异常
         if (msg == null) {
             throw new NullPointerException("msg");
         }
@@ -790,7 +794,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
             // cancelled
             return promise;
         }
-
+        //写入消息到内存队列
         write(msg, true, promise);
 
         return promise;
@@ -798,7 +802,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     private void invokeWriteAndFlush(Object msg, ChannelPromise promise) {
         if (invokeHandler()) {
+//            将消息放入输出缓冲区中（ChannelOutboundBuffer）
             invokeWrite0(msg, promise);
+//            将输出缓冲区中的数据通过socket发送到网络中
             invokeFlush0();
         } else {
             writeAndFlush(msg, promise);
@@ -816,6 +822,8 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
                 next.invokeWrite(m, promise);
             }
         } else {
+            //提交任务到eventLoop任务队列
+            // io.netty.channel.AbstractChannelHandlerContext.AbstractWriteTask.run()
             AbstractWriteTask task;
             if (flush) {
                 task = WriteAndFlushTask.newInstance(next, m, promise);
@@ -1051,10 +1059,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
             task.ctx = ctx;
             task.msg = msg;
             task.promise = promise;
-
             if (ESTIMATE_TASK_SIZE_ON_SUBMIT) {
                 ChannelOutboundBuffer buffer = ctx.channel().unsafe().outboundBuffer();
-
+                // 检查是否为null，因为如果通道已经关闭，它可以被设置为null
                 // Check for null as it may be set to null if the channel is closed already
                 if (buffer != null) {
                     task.size = ctx.pipeline.estimatorHandle().size(msg) + WRITE_TASK_OVERHEAD;
@@ -1077,6 +1084,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
                 }
                 write(ctx, msg, promise);
             } finally {
+                // 设置为null被GC在年轻代回收回收
                 // Set to null so the GC can collect them directly
                 ctx = null;
                 msg = null;

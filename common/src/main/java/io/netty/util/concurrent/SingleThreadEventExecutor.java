@@ -160,7 +160,9 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         super(parent);
         this.addTaskWakesUp = addTaskWakesUp;
         this.maxPendingTasks = Math.max(16, maxPendingTasks);
+        //保存线程执行器
         this.executor = ObjectUtil.checkNotNull(executor, "executor");
+        //如果执行任务不在NioEventLoop线程执行，将任务放入到队列中
         taskQueue = newTaskQueue(this.maxPendingTasks);
         rejectedExecutionHandler = ObjectUtil.checkNotNull(rejectedHandler, "rejectedHandler");
     }
@@ -269,10 +271,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         }
     }
 
+    // 从队列去第一个定时任务，放到普通队列
     private boolean fetchFromScheduledTaskQueue() {
         long nanoTime = AbstractScheduledEventExecutor.nanoTime();
         Runnable scheduledTask  = pollScheduledTask(nanoTime);
         while (scheduledTask != null) {
+            //放到普通队列
             if (!taskQueue.offer(scheduledTask)) {
                 // No space left in the task queue add it back to the scheduledTaskQueue so we pick it up again.
                 scheduledTaskQueue().add((ScheduledFutureTask<?>) scheduledTask);
@@ -313,6 +317,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
      * Add a task to the task queue, or throws a {@link RejectedExecutionException} if this instance was shutdown
      * before.
      */
+    //普通任务添加
     protected void addTask(Runnable task) {
         if (task == null) {
             throw new NullPointerException("task");
@@ -344,6 +349,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
      *
      * @return {@code true} if and only if at least one task was run
      */
+//    将一系列定时任务（用户可调用schedule()方法来添加定时任务）加入到了taskQueue中，并且执行里面的任务，如果出现了异常，就打印日志，输出到控制台。
     protected boolean runAllTasks() {
         assert inEventLoop();
         boolean fetchedAll;
@@ -389,24 +395,30 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
      * the tasks in the task queue and returns if it ran longer than {@code timeoutNanos}.
      */
     protected boolean runAllTasks(long timeoutNanos) {
+        //定时任务队列的任务全部挪到NioEventLoop.taskQueue中
         fetchFromScheduledTaskQueue();
+        //从taskQueue中取出任务
         Runnable task = pollTask();
         if (task == null) {
             afterRunningAllTasks();
             return false;
         }
-
+        //计算截止时间
+        //ScheduledFutureTask.nanoTime()：定时任务开始执行到现在的时间
         final long deadline = ScheduledFutureTask.nanoTime() + timeoutNanos;
         long runTasks = 0;
         long lastExecutionTime;
         for (;;) {
+            //执行任务
             safeExecute(task);
 
             runTasks ++;
 
+            // 每64次判断一下是否超时，
             // Check timeout every 64 tasks because nanoTime() is relatively expensive.
             // XXX: Hard-coded value - will make it configurable if it is really a problem.
             if ((runTasks & 0x3F) == 0) {
+                //每64次刷新一次：距离任务开始的时间，这是一个耗时操作，所有64次才判断
                 lastExecutionTime = ScheduledFutureTask.nanoTime();
                 if (lastExecutionTime >= deadline) {
                     break;
@@ -548,7 +560,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         }
 
         if (isShuttingDown()) {
-            return terminationFuture();
+            return terminationFuture();// 正在关闭阻止其他线程
         }
 
         boolean inEventLoop = inEventLoop();
@@ -571,9 +583,10 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                         break;
                     default:
                         newState = oldState;
-                        wakeup = false;
+                        wakeup = false;// 已经有线程唤醒，所以不用再唤醒
                 }
             }
+            // 保证只有一个线程将oldState修改为newState
             if (STATE_UPDATER.compareAndSet(this, oldState, newState)) {
                 break;
             }
@@ -669,7 +682,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
             throw new IllegalStateException("must be invoked from an event loop");
         }
 
-        cancelScheduledTasks();
+        cancelScheduledTasks(); // 取消调度任务
 
         if (gracefulShutdownStartTime == 0) {
             gracefulShutdownStartTime = ScheduledFutureTask.nanoTime();
@@ -737,7 +750,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         if (task == null) {
             throw new NullPointerException("task");
         }
-
+        //是否在本线程里执行
         boolean inEventLoop = inEventLoop();
         if (inEventLoop) {
             addTask(task);
@@ -844,9 +857,11 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
     private void doStartThread() {
         assert thread == null;
+        //ThreadPerTaskExecutor#execute() 开启netty自定义的线程FastThreadLocalThread，并执行
         executor.execute(new Runnable() {
             @Override
             public void run() {
+                //运行时，开始持有运行时线程
                 thread = Thread.currentThread();
                 if (interrupted) {
                     thread.interrupt();
@@ -855,6 +870,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                 boolean success = false;
                 updateLastExecutionTime();
                 try {
+                    //执行 NioEventLoop.run() ，死循环，一般不会退出
                     SingleThreadEventExecutor.this.run();
                     success = true;
                 } catch (Throwable t) {

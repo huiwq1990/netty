@@ -69,6 +69,10 @@ public final class ChannelOutboundBuffer {
 
     private final Channel channel;
 
+//    tailEntry;对象表示始终指向最后一个Entry对象（即，最后加入到该ChannelOutboundBuffer中的写请求的数据消息）
+//    unflushedEntry表示还未刷新的ByteBuf的链表头；
+//    flushedEntry表示调用flush()操作时将会进行刷新的ByteBuf的链表头。
+
     // Entry(flushedEntry) --> ... Entry(unflushedEntry) --> ... Entry(tailEntry)
     //
     // The Entry that is the first in the linked-list structure that was flushed
@@ -107,6 +111,7 @@ public final class ChannelOutboundBuffer {
      * Add given message to this {@link ChannelOutboundBuffer}. The given {@link ChannelPromise} will be notified once
      * the message was written.
      */
+//    write操作最终会将包含有待发送消息的ByteBuf封装成Entry对象放入unflushedEntry单向链表的尾部。
     public void addMessage(Object msg, int size, ChannelPromise promise) {
         Entry entry = Entry.newInstance(msg, size, total(msg), promise);
         if (tailEntry == null) {
@@ -135,6 +140,8 @@ public final class ChannelOutboundBuffer {
         // where added in the meantime.
         //
         // See https://github.com/netty/netty/issues/2577
+//        先判断unflushedEntry是否为null，如果为null则说明所有的entries已经被flush了，并在此期间没有新的消息被添加进ChannelOutboundBuffer中。所有直接返回就好。
+//        如果unflushedEntry非空，则说明有待发送的entries等待被发送。那么将unflushedEntry赋值给flushedEntry（调用flush()操作时就是将该flushedEntry单向链表中的entries的数据发到网络），并将unflushedEntry置为null，表示没有待发送的entries了。并通过flushed成员属性记录待发送entries的个数。
         Entry entry = unflushedEntry;
         if (entry != null) {
             if (flushedEntry == null) {
@@ -164,6 +171,7 @@ public final class ChannelOutboundBuffer {
         incrementPendingOutboundBytes(size, true);
     }
 
+    //如果pending的数据超过水位，channel将不可写
     private void incrementPendingOutboundBytes(long size, boolean invokeLater) {
         if (size == 0) {
             return;
@@ -750,6 +758,22 @@ public final class ChannelOutboundBuffer {
          */
         boolean processMessage(Object msg) throws Exception;
     }
+
+//    a) pendingSize：记录有该ByteBuf or ByteBufs 中待发送数据大小 和 对象本身内存大小 的累加和;
+//    b) promise：该异步写操作的ChannelPromise（用于在完成真是的网络层write后去标识异步操作的完成以及回调已经注册到该promise上的listeners）;
+//    c) total：待发送数据包的总大小（该属性与pendingSize的区别在于，如果是待发送的是FileRegion数据对象，则pengdingSize中只有对象内存的大小，即真实的数据大小被记录为0；但total属性则是会记录FileRegion中数据大小，并且total属性是不包含对象内存大小，仅仅是对数据本身大小的记录）;
+//    e) msg：原始消息对象的引用;
+//    f) count：写消息数据个数的记录（如果写消息数据是个数组的话，该值会大于1）
+//    这里说明下，pendingSize属性记录的不单单是写请求数据的大小，记录的是这个写请求对象的大小。这是什么意思了？这里做个简单的介绍：
+//    一个对象占用的内存大小除了实例数据（instance data），还包括对象头（header）以及对齐填充（padding）。所以一个对象所占的内存大小为『对象头 + 实例数据 + 对齐填充』，即
+    // Assuming a 64-bit JVM:
+    //  - 16 bytes object header
+    //  - 8 reference fields
+    //  - 2 long fields
+    //  - 2 int fields
+    //  - 1 boolean field
+    //  - padding
+
 
     static final class Entry {
         private static final Recycler<Entry> RECYCLER = new Recycler<Entry>() {

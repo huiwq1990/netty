@@ -60,6 +60,7 @@ public class DefaultThreadFactory implements ThreadFactory {
     }
 
     public DefaultThreadFactory(Class<?> poolType, boolean daemon, int priority) {
+        // nioEventLoop
         this(toPoolName(poolType), daemon, priority);
     }
 
@@ -67,7 +68,7 @@ public class DefaultThreadFactory implements ThreadFactory {
         if (poolType == null) {
             throw new NullPointerException("poolType");
         }
-
+        // NioEventLoop，将首字母小写
         String poolName = StringUtil.simpleClassName(poolType);
         switch (poolName.length()) {
             case 0:
@@ -91,7 +92,7 @@ public class DefaultThreadFactory implements ThreadFactory {
             throw new IllegalArgumentException(
                     "priority: " + priority + " (expected: Thread.MIN_PRIORITY <= priority <= Thread.MAX_PRIORITY)");
         }
-
+        //线程前缀 nioEventLoop-$poolId-xx
         prefix = poolName + '-' + poolId.incrementAndGet() + '-';
         this.daemon = daemon;
         this.priority = priority;
@@ -103,8 +104,10 @@ public class DefaultThreadFactory implements ThreadFactory {
                 Thread.currentThread().getThreadGroup() : System.getSecurityManager().getThreadGroup());
     }
 
+    //创建新的Thread
     @Override
     public Thread newThread(Runnable r) {
+        //设置线程名称
         Thread t = newThread(new DefaultRunnableDecorator(r), prefix + nextId.incrementAndGet());
         try {
             if (t.isDaemon()) {
@@ -126,6 +129,7 @@ public class DefaultThreadFactory implements ThreadFactory {
         return t;
     }
 
+    //对ThreadLocal进行优化
     protected Thread newThread(Runnable r, String name) {
         return new FastThreadLocalThread(threadGroup, r, name);
     }

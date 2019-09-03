@@ -107,7 +107,8 @@ public abstract class DefaultMaxMessagesRecvByteBufAllocator implements MaxMessa
         public boolean continueReading(UncheckedBooleanSupplier maybeMoreDataSupplier) {
             return config.isAutoRead() &&
                    maybeMoreDataSupplier.get() &&
-                   totalMessages < maxMessagePerRead &&
+                    //判断读取到的连接总数是否大于最大连接数，maxMessagePerRead默认16
+                    totalMessages < maxMessagePerRead &&
                    totalBytesRead > 0;
         }
 

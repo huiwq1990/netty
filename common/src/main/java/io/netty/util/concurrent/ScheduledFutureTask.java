@@ -90,6 +90,7 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
         return unit.convert(delayNanos(), TimeUnit.NANOSECONDS);
     }
 
+    // 比较任务的截止时间，如果一致比较ID
     @Override
     public int compareTo(Delayed o) {
         if (this == o) {

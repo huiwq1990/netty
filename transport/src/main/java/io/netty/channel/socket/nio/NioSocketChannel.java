@@ -96,6 +96,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
      */
     public NioSocketChannel(Channel parent, SocketChannel socket) {
         super(parent, socket);
+        //实例化一个NioSocketChannelConfig
         config = new NioSocketChannelConfig(this, socket.socket());
     }
 
@@ -326,6 +327,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         }
     }
 
+    //设置注册connect监听
     @Override
     protected boolean doConnect(SocketAddress remoteAddress, SocketAddress localAddress) throws Exception {
         if (localAddress != null) {
@@ -389,14 +391,18 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         for (;;) {
             int size = in.size();
             if (size == 0) {
+//                判断当前ChannelOutboundBuffer中的数据都已经被传输完了，如果已经传输完了，并且发现NioSocketChannel还注册有SelectionKey.OP_WRITE事件，则将SelectionKey.OP_WRITE从感兴趣的事件中移除，即，Selector不再监听该NioSocketChannel的可写事件了。然后跳出循环，方法返回。
                 // All written so clear OP_WRITE
                 clearOpWrite();
                 break;
             }
+//            初始化writtenBytes = 0、done = false、setOpWrite = false三个属性，它们分别表示本次循环已经写出的字节数、本次循环是否写出了所有待写出的数据、是否需要设置SelectionKey.OP_WRITE事件的标志为。
             long writtenBytes = 0;
             boolean done = false;
             boolean setOpWrite = false;
 
+//            获取本次循环需要写出的ByteBuffer个数
+//                    获取本次循环总共需要写出的数据的字节总数
             // Ensure the pending writes are made of ByteBufs only.
             ByteBuffer[] nioBuffers = in.nioBuffers();
             int nioBufferCnt = in.nioBufferCount();
@@ -444,6 +450,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     break;
             }
 
+//            释放所有已经写出去的缓存对象，并修改部分写缓冲的索引。
             // Release the fully written buffers, and update the indexes of the partially written buffer.
             in.removeBytes(writtenBytes);
 

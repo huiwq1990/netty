@@ -126,6 +126,7 @@ public abstract class AbstractEpollServerChannel extends AbstractEpollChannel im
                         // lastBytesRead represents the fd. We use lastBytesRead because it must be set so that the
                         // EpollRecvByteAllocatorHandle knows if it should try to read again or not when autoRead is
                         // enabled.
+                        //处理accept事件
                         allocHandle.lastBytesRead(fd().accept(acceptedAddress));
                         if (allocHandle.lastBytesRead() == -1) {
                             // this means everything was handled for now

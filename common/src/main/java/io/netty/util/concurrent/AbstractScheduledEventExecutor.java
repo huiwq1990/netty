@@ -41,6 +41,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
         return ScheduledFutureTask.nanoTime();
     }
 
+    //非现场安全的队列
     Queue<ScheduledFutureTask<?>> scheduledTaskQueue() {
         if (scheduledTaskQueue == null) {
             scheduledTaskQueue = new PriorityQueue<ScheduledFutureTask<?>>();
@@ -142,6 +143,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
                 this, command, null, ScheduledFutureTask.deadlineNanos(unit.toNanos(delay))));
     }
 
+    //创建定时任务
     @Override
     public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
         ObjectUtil.checkNotNull(callable, "callable");

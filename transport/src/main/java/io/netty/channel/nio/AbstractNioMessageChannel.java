@@ -15,12 +15,7 @@
  */
 package io.netty.channel.nio;
 
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelConfig;
-import io.netty.channel.ChannelOutboundBuffer;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.RecvByteBufAllocator;
-import io.netty.channel.ServerChannel;
+import io.netty.channel.*;
 
 import java.io.IOException;
 import java.net.PortUnreachableException;
@@ -56,7 +51,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
     }
 
     private final class NioMessageUnsafe extends AbstractNioUnsafe {
-
+        // 临时存储读到的连接
         private final List<Object> readBuf = new ArrayList<Object>();
 
         @Override
@@ -64,6 +59,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
             assert eventLoop().inEventLoop();
             final ChannelConfig config = config();
             final ChannelPipeline pipeline = pipeline();
+            // 服务端接入速率处理器
             final RecvByteBufAllocator.Handle allocHandle = unsafe().recvBufAllocHandle();
             allocHandle.reset(config);
 
@@ -72,6 +68,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
             try {
                 try {
                     do {
+                        //对于NioServerSocketChannel来说，这里读取的是底层socket的accept事件
                         int localRead = doReadMessages(readBuf);
                         if (localRead == 0) {
                             break;
@@ -82,6 +79,8 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                         }
 
                         allocHandle.incMessagesRead(localRead);
+                        // 默认一次读取16个连接
+//                        DefaultMaxMessagesRecvByteBufAllocator.MaxMessageHandle.continueReading()
                     } while (allocHandle.continueReading());
                 } catch (Throwable t) {
                     exception = t;
@@ -90,6 +89,8 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                 int size = readBuf.size();
                 for (int i = 0; i < size; i ++) {
                     readPending = false;
+                    //会触发ByteToMessageDecoder.channelRead等方法
+                    //ServerBootstrap.ServerBootstrapAcceptor.channelRead()方法，将读取到的channel放入注册到WorkerGroup
                     pipeline.fireChannelRead(readBuf.get(i));
                 }
                 readBuf.clear();

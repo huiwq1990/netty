@@ -139,6 +139,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     @Override
     void init(Channel channel) throws Exception {
+        // 设置server端channel的属性
         final Map<ChannelOption<?>, Object> options = options0();
         synchronized (options) {
             setChannelOptions(channel, options, logger);
@@ -159,6 +160,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         final ChannelHandler currentChildHandler = childHandler;
         final Entry<ChannelOption<?>, Object>[] currentChildOptions;
         final Entry<AttributeKey<?>, Object>[] currentChildAttrs;
+        //配置client端的channel属性
         synchronized (childOptions) {
             currentChildOptions = childOptions.entrySet().toArray(newOptionArray(childOptions.size()));
         }
@@ -179,6 +181,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                 // In this case the initChannel(...) method will only be called after this method returns. Because
                 // of this we need to ensure we add our handler in a delayed fashion so all the users handler are
                 // placed in front of the ServerBootstrapAcceptor.
+                // 添加服务端channel ServerBootstrapAcceptor，默认加入的
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {
@@ -256,6 +259,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             }
 
             try {
+                //AbstractChannel.AbstractUnsafe#register0()，触发了通道激活事件
                 childGroup.register(child).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {
